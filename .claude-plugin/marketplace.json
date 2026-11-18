@@ -1,0 +1,11 @@
+{
+  "name": "showtell",
+  "owner": { "name": "jeongwoo" },
+  "plugins": [
+    {
+      "name": "showtell",
+      "source": "./",
+      "description": "AI의 설명을 장면 전환이 있는 시각적 HTML 문서로 재구성합니다."
+    }
+  ]
+}

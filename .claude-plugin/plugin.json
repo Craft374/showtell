@@ -1,0 +1,7 @@
+{
+  "name": "showtell",
+  "version": "0.1.0",
+  "description": "AI의 설명을 장면 전환이 있는 시각적 HTML 문서로 재구성합니다. Don't just tell. Show it.",
+  "author": { "name": "jeongwoo" },
+  "keywords": ["visualization", "html", "slides", "explain"]
+}

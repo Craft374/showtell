@@ -1,0 +1,120 @@
+{
+  "title": "행사 촬영 리뷰 (예시)",
+  "subtitle": "사진 120장 기록으로 본 오늘과 내일 세팅 · 예시 문서",
+  "summary": [
+    { "text": "느린 셔터 컷은 **P모드**에서 나왔다", "to": "modes" },
+    { "text": "셔터는 **1/250초**로 고정하고 ISO는 오토로 둔다", "to": "exposure" },
+    "조리개 한 단마다 빛은 절반이 된다"
+  ],
+  "scenes": [
+    {
+      "id": "modes",
+      "title": "느린 셔터는 어디서 나왔나",
+      "message": "느린 셔터 컷 25장은 전부 P모드였다.",
+      "stage": {
+        "type": "units", "id": "shots", "total": 120, "unit": "장",
+        "states": [
+          { "say": "오늘 찍은 사진 전체", "groups": [{ "label": "전체", "n": 120 }] },
+          { "say": "촬영 모드로 나누면", "layout": "rows", "groups": [
+            { "label": "S (셔터 우선)", "n": 80, "key": "s" },
+            { "label": "P (프로그램)", "n": 40, "key": "p" }
+          ] },
+          { "say": "P모드 40장 중 1/60초 이하가 25장", "groups": [
+            { "label": "S (셔터 우선)", "n": 80, "key": "s" },
+            { "label": "1/60초 이하", "n": 25, "of": "P (프로그램)", "key": "slow" },
+            { "n": "rest", "of": "P (프로그램)", "key": "p" }
+          ], "focus": ["1/60초 이하"] }
+        ]
+      }
+    },
+    {
+      "id": "hours",
+      "title": "시간대로 다시 세면",
+      "message": "모드와 시간대는 서로 다른 기준이라 점이 이동하지 않고 다시 놓인다.",
+      "stage": {
+        "continue": "shots",
+        "states": [
+          { "layout": "rows", "groups": [
+            { "label": "10시", "n": 30 },
+            { "label": "11시", "n": 50 },
+            { "label": "12시", "n": 40 }
+          ] }
+        ]
+      }
+    },
+    {
+      "id": "exposure",
+      "title": "오늘의 퍼짐 → 내일의 값",
+      "stage": {
+        "type": "dials", "id": "exp",
+        "axes": [
+          { "key": "ss", "label": "셔터", "stops": ["1/60", "1/125", "1/250"] },
+          { "key": "iso", "label": "ISO", "min": 100, "max": 12800, "log": true, "ticks": [100, 800, 6400] }
+        ],
+        "items": [
+          { "id": "x", "label": "오늘", "key": "p", "at": { "ss": ["1/60", "1/250"], "iso": [400, 6400] }, "labels": { "ss": "1/60~1/250 제각각", "iso": "400~6400" } },
+          { "id": "a", "label": "A컷", "text": "S · 1/250 · ISO 800 — 선명함", "at": { "ss": "1/250", "iso": 800 } }
+        ],
+        "states": [
+          { "say": "오늘은 셔터와 ISO가 컷마다 달랐다", "show": ["x"] },
+          { "say": "선명했던 컷은 1/250초", "show": ["x", "a"], "focus": ["a"] },
+          { "say": "내일은 셔터 하나만 고정한다", "set": { "x": { "label": "내일", "at": { "ss": "1/250", "iso": [null, null] }, "labels": { "ss": "**1/250 고정**", "iso": "오토" } } }, "show": ["x"] }
+        ]
+      }
+    },
+    {
+      "id": "light",
+      "title": "조리개 한 단의 의미",
+      "message": "조리개를 한 단 조일 때마다 들어오는 빛은 절반이 된다.",
+      "stage": {
+        "type": "track", "id": "aperture",
+        "x": { "label": "조리개", "bins": ["f/2.8", "f/4", "f/5.6", "f/8"] },
+        "rows": [{ "id": "lux", "label": "f/2.8 대비 광량", "unit": "%", "mark": "bar", "values": [100, 50, 25, 12.5], "max": 100 }],
+        "notes": [{ "bin": "f/5.6", "text": "f/2.8보다 2단 어두움" }],
+        "scrub": true,
+        "states": [{}, { "focus": ["f/5.6"] }]
+      }
+    },
+    {
+      "id": "presets",
+      "title": "상황별 세팅 바꿔 보기",
+      "message": "측광과 셔터만 바꾸면 되고 나머지는 같다.",
+      "stage": {
+        "type": "lookup", "id": "sit", "control": "tabs", "base": "people",
+        "fields": ["모드 · 셔터", "ISO", "측광"],
+        "records": [
+          { "id": "people", "label": "인물", "badge": "기본", "values": ["M · **1/250**", "오토", "멀티"] },
+          { "id": "stage", "label": "무대", "values": ["M · **1/250**", "오토", "하이라이트"], "notes": ["", "", "밝은 화면이 날아가지 않게"] },
+          { "id": "group", "label": "단체", "values": ["M · 1/125", "오토", "멀티"] }
+        ],
+        "states": [{ "label": "인물", "record": "people" }, { "label": "무대", "record": "stage" }, { "label": "단체", "record": "group" }]
+      }
+    },
+    {
+      "id": "framing",
+      "title": "28mm에서 사람은 가운데로",
+      "message": "가장자리 얼굴은 왜곡 보정으로 늘어나 보인다.",
+      "stage": {
+        "type": "photos", "id": "frame",
+        "items": [{ "id": "f", "name": "화면 (도식)", "frame": "3:2", "zones": [
+          { "id": "c", "area": "center", "text": "얼굴은 화면 중앙 쪽에" },
+          { "id": "e", "area": "edges", "text": "가장자리는 늘어나 보일 수 있음" }
+        ] }],
+        "states": [{ "zones": ["f.c"] }, { "zones": ["f.e"], "uncertain": "렌즈마다 정도가 다름" }]
+      }
+    },
+    {
+      "id": "check",
+      "title": "출발 전 체크",
+      "message": "현장에서 메뉴를 뒤지지 않게 전날 세팅해 둔다.",
+      "blocks": [
+        { "type": "checklist", "items": [
+          { "text": "셔터 1/250초 고정", "to": "exposure" },
+          "ISO 오토 확인",
+          { "text": "무대에서는 하이라이트 측광", "note": "인물로 돌아오면 멀티", "to": "presets" }
+        ] },
+        { "type": "note", "tone": "uncertain", "text": "예시 값입니다. 현장 조명에 맞춰 조정하세요." }
+      ]
+    }
+  ]
+}

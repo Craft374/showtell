@@ -1,0 +1,374 @@
+/* Showtell v2 디자인 시스템 — 정보가 먼저 읽히고, 정보 자체가 움직인다 */
+:root {
+  color-scheme: light dark;
+  --bg: #fcfcfb; --panel: #f3f2ee; --fg: #0b0b0b; --fg2: #52514e; --muted: #6f6e68;
+  --line: #e2e1dc; --grid: #ebeae6;
+  --accent: #2a78d6; --accent-ink: #1c5cab; --accent-soft: #e5eefa;
+  --warn: #c98500; --warn-soft: #fbf1dc;
+  /* 범주형 계열 색 — 고정 순서, 라이트/다크 각각 색각 이상 검증된 단계 */
+  --c1: #2a78d6; --c2: #eb6834; --c3: #1baf7a; --c4: #eda100;
+  --c5: #e87ba4; --c6: #008300; --c7: #6250d6; --c8: #e34948;
+  --i1: #fcfcfb; --i2: #0b0b0b; --i3: #0b0b0b; --i4: #0b0b0b; --i5: #0b0b0b; --i6: #fcfcfb; --i7: #fcfcfb; --i8: #fcfcfb;
+  --rest: #cfcdc6;
+  --font: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", "Noto Sans KR", "Malgun Gothic", "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "D2Coding", monospace;
+  /* 움직임: 이동은 천천히 들어가고 나오는 곡선(3Blue1Brown), 페이드·값 바뀜은 빠르게 멈추는 곡선(Keynote) */
+  --ease-move: cubic-bezier(.65, 0, .35, 1);
+  --ease-out: cubic-bezier(.2, .7, .2, 1);
+  --radius: 14px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1a1a19; --panel: #232322; --fg: #f0efec; --fg2: #c3c2b7; --muted: #9a998f;
+    --line: #363633; --grid: #2b2b29;
+    --accent: #3987e5; --accent-ink: #86b6ef; --accent-soft: #1d2a3b;
+    --warn: #fab219; --warn-soft: #33290f;
+    --c1: #3987e5; --c2: #d95926; --c3: #199e70; --c4: #c98500;
+    --c5: #d55181; --c6: #008300; --c7: #9085e9; --c8: #e66767;
+    --i1: #1a1a19; --i2: #1a1a19; --i3: #1a1a19; --i4: #1a1a19; --i5: #1a1a19; --i6: #f0efec; --i7: #1a1a19; --i8: #1a1a19;
+    --rest: #4a4a46;
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font: 16px/1.7 var(--font); word-break: keep-all; overflow-wrap: break-word;
+  -webkit-font-smoothing: antialiased;
+}
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+p { margin: 0; }
+strong { font-weight: 650; }
+code { font-family: var(--mono); font-size: .9em; background: var(--panel); padding: .1em .35em; border-radius: 5px; }
+a { color: var(--accent-ink); }
+
+/* ---------- 장면 구성 (내용에 따라 렌더러가 고른다) ---------- */
+main > section { padding: clamp(56px, 9vh, 104px) clamp(20px, 5vw, 64px); border-top: 1px solid var(--line); }
+.st-inner { width: 100%; max-width: 920px; margin: 0 auto; }
+.st-c-reference .st-inner { max-width: 720px; }
+.st-c-figure .st-inner { max-width: 1200px; }
+.st-c-panel .st-inner { max-width: 880px; }
+.st-sc h2 { font-size: clamp(1.5rem, 3.2vw, 2.2rem); line-height: 1.25; letter-spacing: -.02em; font-weight: 700; margin: 0; }
+.st-msg { font-size: clamp(1.05rem, 1.8vw, 1.2rem); color: var(--fg2); margin-top: .6rem; max-width: 40em; }
+.st-blocks { display: grid; gap: 28px; margin-top: 2rem; }
+.st-block { min-width: 0; }
+.st-btitle { font-size: 1rem; font-weight: 650; margin: 0 0 .8rem; }
+.st-c-panel .st-stage { margin-top: 1.8rem; }
+
+/* 표지 */
+.st-cover { min-height: 88vh; min-height: 88svh; display: flex; align-items: center; border-top: 0 !important; }
+.st-cover h1 { font-size: clamp(2.2rem, 6vw, 4rem); line-height: 1.15; letter-spacing: -.03em; font-weight: 750; margin: 0; }
+.st-sub { font-size: clamp(1.1rem, 2.2vw, 1.35rem); color: var(--fg2); margin-top: .8rem; }
+.st-summary { list-style: none; padding: 0; margin: 2.4rem 0 0; counter-reset: sum; border-top: 1px solid var(--line); }
+.st-summary li { counter-increment: sum; display: flex; gap: 1rem; padding: .9rem 0; border-bottom: 1px solid var(--line); font-size: 1.05rem; }
+.st-summary li::before { content: counter(sum, decimal-leading-zero); font: 600 .8rem/1.9 var(--mono); color: var(--accent-ink); flex: none; }
+.st-summary a { color: inherit; text-decoration-color: var(--line); text-underline-offset: 4px; }
+.st-summary a:hover { text-decoration-color: var(--accent); }
+.st-meta { margin-top: 2rem; font-size: .85rem; color: var(--muted); }
+html:not(.js) .st-hint { display: none; }
+
+/* 시퀀스: 무대가 고정되고 비트 글이 지나간다 */
+.st-seq { display: grid; gap: 24px clamp(24px, 4vw, 56px); max-width: 1240px; margin: 0 auto; box-sizing: content-box; }
+@media (min-width: 860px) { .st-seq { grid-template-columns: 3fr 2fr; } }
+.st-stagecol { min-width: 0; }
+.st-seq .st-stage { width: min(100%, calc(76vh / var(--ar, 1))); margin-inline: auto; }
+html.js .st-stagecol { position: sticky; top: 10vh; align-self: start; max-height: 80vh; overflow: hidden auto; --phmax: 32vh; }
+html.js .st-stagecol.st-tall { max-height: none; overflow: visible; } /* 화면보다 긴 무대: top은 런타임이 정한다 */
+@media (max-width: 859px) {
+  html.js .st-stagecol { --phmax: 22vh; top: 0; z-index: 5; max-height: 58vh; max-height: 58svh; background: var(--bg); padding: 10px 0 8px; border-bottom: 1px solid var(--line); }
+  .st-seq .st-stage { width: min(100%, calc(52vh / var(--ar, 1))); }
+  html.js .st-stagecol.st-tall { position: static; } /* 좁은 화면에서 긴 무대가 글을 다 덮지 않게 */
+}
+.st-steps { min-width: 0; }
+.st-steps .st-sc + .st-sc { margin-top: 12vh; padding-top: 2rem; border-top: 1px solid var(--line); }
+.st-beats { list-style: none; padding: 0; margin: 1.2rem 0 0; }
+.st-beat { padding: 1rem 0; border-top: 1px solid var(--line); }
+.st-say { font-size: 1.1rem; }
+.st-data { font-size: .9rem; color: var(--fg2); margin-top: .35rem; }
+.st-blabel { font-weight: 650; }
+.st-take { padding: 1rem 0; border-top: 2px solid var(--fg); font-weight: 650; font-size: 1.12rem; }
+html.js .st-seq .st-beat, html.js .st-seq .st-take { min-height: 55vh; min-height: 55svh; transition: opacity .45s var(--ease-out); }
+html.js .st-seq .st-beat:not(.is-on), html.js .st-seq .st-take:not(.is-on) { opacity: .4; }
+@media (max-width: 859px) { html.js .st-seq .st-beat, html.js .st-seq .st-take { min-height: 45vh; min-height: 45svh; } }
+/* 패널(탭·슬라이더): 지금 상태의 설명만 무대 아래에 */
+.st-caps { margin-top: 1rem; }
+html.js .st-caps .st-beat:not(.is-on) { display: none; }
+html.js .st-caps .st-beat { border-top: 0; padding-top: 0; }
+
+/* ---------- 무대 공통: 상태 규칙은 렌더러가 상태 수만큼 만든다 ---------- */
+.st-stage { margin: 0; position: relative; container-type: inline-size; }
+.st-v { --on: 0; --dim: 0; }
+.st-f { --hot: 0; --dim: 0; }
+.st-v, .st-f { opacity: calc(var(--on, 1) * (1 - .72 * var(--dim, 0) * (1 - var(--hot, 0)))); transition: opacity .45s var(--ease-out); }
+/* 숨은 상태의 행·목록은 접는다 (자리를 비워 두면 무대 가운데 빈칸이 생긴다). 같은 자리를 바꿔 끼우는 .st-stack은 그대로 */
+.st-col { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .7s var(--ease-move), opacity .45s var(--ease-out); }
+.st-col > * { min-height: 0; overflow: hidden; }
+.st-stack { display: grid; }
+.st-stack > * { grid-area: 1 / 1; }
+.st-cap { font-size: .85rem; color: var(--muted); margin-top: .7rem; }
+.st-unc { display: inline-block; font-size: .75rem; line-height: 1.5; border: 1px dashed var(--fg2); border-radius: 6px; padding: 0 .4em; color: var(--fg2); }
+.st-init, .st-init * { transition: none !important; animation: none !important; }
+.st-fallback { margin-top: 1rem; font-size: .9rem; }
+.st-fallback summary { cursor: pointer; color: var(--fg2); font-size: .85rem; }
+.st-fallback .st-tablewrap { margin-top: .6rem; }
+
+/* 조작 */
+.st-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+.st-tabs button { font: 600 .85rem/1.3 var(--font); padding: .5rem .85rem; border-radius: 999px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); cursor: pointer; transition: background .2s, color .2s; }
+.st-tabs button:hover { border-color: var(--muted); }
+.st-tabs button[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.st-slider { margin-bottom: 16px; }
+.st-range, .st-scrub { width: 100%; margin: 0; accent-color: var(--accent); }
+.st-slider output { display: block; font-weight: 650; }
+.st-stops { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 8px; list-style: none; padding: 0; margin: 2px 0 0; font-size: .75rem; color: var(--fg2); }
+html:not(.js) .st-ctl { display: none; }
+
+/* ---------- units: 점이 다시 묶이고 나뉘고 합쳐진다 ---------- */
+.st-field { position: relative; height: var(--h, 50cqw); overflow: clip; overflow-clip-margin: 4px; transition: height .7s var(--ease-move); } /* 다른 상태의 라벨이 무대 밖으로 나가 스크롤을 만들지 않게 */
+.st-m {
+  position: absolute; left: 0; top: 0;
+  width: calc(var(--d) * 1cqw); height: calc(var(--d) * 1cqw); border-radius: 22%;
+  background: var(--col, var(--fg2));
+  transform: translate(calc(var(--x) * 1cqw), calc(var(--gy, 0px) + var(--y) * 1cqw));
+  transition: transform .7s var(--ease-move) calc(var(--lag, 0) * 1ms), background-color .4s var(--ease-out), opacity .45s var(--ease-out);
+}
+.is-dis .st-field { animation: st-dis .8s var(--ease-out); }
+.is-dis .st-m { transition: transform 0s .3s, background-color 0s .3s, opacity .45s var(--ease-out); }
+@keyframes st-dis { 0%, 100% { opacity: 1; } 35%, 65% { opacity: 0; } }
+.st-lab { position: absolute; left: 0; width: 25cqw; font-size: min(12px, 3.75cqw); line-height: min(18px, 5.6cqw); color: var(--fg2); }
+.st-lab b { color: var(--fg); font-weight: 650; font-variant-numeric: tabular-nums; }
+.st-sw { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; vertical-align: 1px; }
+.st-unitnote { font-size: .75rem; color: var(--muted); margin-top: .6rem; }
+
+/* ---------- dials: 눈금 위 핀·범위, 범위가 값으로 줄어든다 ---------- */
+.st-dials { display: grid; gap: 20px; }
+.st-axl { font-size: .85rem; font-weight: 650; margin-bottom: 2px; }
+.st-rule { position: relative; margin-inline: 7px; height: calc(var(--lanes, 1) * 18px + 26px); transition: height .7s var(--ease-move); } /* 끝값 핀(±7px)이 무대 밖으로 나가지 않게 */
+.st-rule::before { content: ""; position: absolute; left: 0; right: 0; top: 18px; height: 1px; background: var(--fg2); }
+.st-tick { position: absolute; top: 0; transform: translateX(-50%); font-size: 11px; line-height: 14px; color: var(--fg2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.st-tick::after { content: ""; position: absolute; left: 50%; top: 15px; width: 1px; height: 7px; background: var(--fg2); }
+.st-mk {
+  position: absolute; top: calc(24px + var(--y, 0) * 18px);
+  left: calc(var(--x) * 1% - 7px); width: calc(var(--w) * 1% + 14px); height: 14px; border-radius: 7px;
+  background: var(--col, var(--fg2)); display: grid; place-items: center;
+  transition: left .7s var(--ease-move), width .7s var(--ease-move), top .7s var(--ease-move), opacity .45s var(--ease-out);
+}
+.st-mk b { font: 700 9px/1 var(--mono); color: var(--ink, var(--bg)); }
+.st-mk.t-target { background: var(--bg); box-shadow: inset 0 0 0 2px var(--col, var(--accent)); }
+.st-mk.t-target b { color: var(--col, var(--accent)); }
+.st-mk.t-zone { background: color-mix(in srgb, var(--col, var(--fg2)) 28%, transparent); }
+.st-mk.t-zone b { color: var(--fg); }
+.st-dl { list-style: none; padding: 0; margin: 4px 0 0; display: grid; gap: 3px; font-size: .85rem; }
+.st-dl li > div { display: flex; gap: .45rem; align-items: baseline; }
+/* 축 아래 범례는 한 줄로 이어 쓴다 (숨은 항목은 폭도 접는다) */
+.st-axis > .st-dl { display: flex; flex-wrap: wrap; gap: 3px 0; }
+.st-axis > .st-dl > li { min-width: 0; max-width: calc(var(--on, 1) * (100% - 14px)); margin-right: calc(var(--on, 1) * 14px); transition: grid-template-rows .7s var(--ease-move), max-width .7s var(--ease-move), margin .7s var(--ease-move), opacity .45s var(--ease-out); }
+.st-key { flex: none; display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; background: var(--fg2); font-style: normal; transform: translateY(2px); }
+.st-key b { font: 700 9px/1 var(--mono); color: var(--ink, var(--bg)); }
+.st-dn { font-weight: 650; }
+.st-dnotes { border-top: 1px solid var(--line); padding-top: 8px; }
+.st-uncl { font-size: .85rem; display: flex; gap: .45rem; align-items: baseline; flex-wrap: wrap; }
+.st-pn { position: absolute; left: 6px; top: 6px; }
+
+/* ---------- track: 구간 위 막대·점·값, 스크럽으로 정확히 읽는다 ---------- */
+.st-track { display: grid; gap: 12px; }
+.st-tlab { font-size: .8rem; font-weight: 650; margin-bottom: 2px; }
+.st-tlab span { font-weight: 400; color: var(--fg2); }
+.st-tgrid { display: grid; grid-template-columns: repeat(var(--nb), minmax(0, 1fr)); gap: 2px; }
+.st-tc { border-radius: 4px; background: color-mix(in srgb, var(--accent) calc(var(--sel, 0) * 14%), transparent); }
+.t-bar .st-tc, .t-dot .st-tc { height: 80px; position: relative; }
+.t-bar .st-tc { display: flex; flex-direction: column; justify-content: flex-end; align-items: center; }
+.st-tbar { display: block; width: 72%; height: calc(var(--v) * .58px); background: var(--accent); border-radius: 3px 3px 0 0; transform-origin: 50% 100%; transform: scaleY(var(--on, 1)); transition: transform .7s var(--ease-move); }
+.st-tv { font-size: 11px; line-height: 1.5; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.st-tdot { position: absolute; left: 50%; bottom: calc(var(--v) * .66px); width: 9px; height: 9px; margin-left: -4.5px; border-radius: 50%; background: var(--c2); box-shadow: 0 0 0 2px var(--bg); }
+.st-tdot .st-tv { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); }
+.t-text .st-tc { font-size: 11px; line-height: 1.35; text-align: center; padding: 4px 1px; }
+.st-tx span { position: relative; font-size: 11px; text-align: center; color: var(--fg2); font-variant-numeric: tabular-nums; }
+.st-tfm { position: absolute; left: 50%; top: -12px; transform: translateX(-50%); font-size: 8px; font-style: normal; color: var(--accent); }
+.st-txl { font-size: .78rem; color: var(--fg2); text-align: center; margin-top: -6px; }
+.st-tcap { font-size: .78rem; color: var(--muted); margin-top: 2px; }
+.st-tnotes { display: grid; }
+.st-tnotes > * { grid-area: 1 / 1; }
+.st-tnote { font-size: .88rem; }
+.st-scrubw { margin-top: 4px; }
+.st-ro { display: none; font-size: .88rem; }
+.st-rohint { font-size: .8rem; color: var(--muted); }
+.st-stage[data-bin] .st-rohint { display: none; }
+@container (max-width: 560px) { .st-dense .t-bar .st-tv, .st-dense .t-dot .st-tv { display: none; } }
+
+/* ---------- lookup: 경우를 바꾸면 달라진 칸만 바뀐다 ---------- */
+.st-lk { border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; }
+.st-lkh { font-size: 1.15rem; font-weight: 700; margin-bottom: .5rem; }
+.st-lk dl { margin: 0; }
+.st-lr {
+  display: grid; grid-template-columns: minmax(6.5rem, 30%) 1fr; gap: .8rem;
+  padding: .55rem 0 .55rem .75rem; border-top: 1px solid var(--line);
+  box-shadow: inset calc(3px * var(--chg, 0)) 0 var(--accent);
+  transition: box-shadow .45s var(--ease-out), opacity .45s var(--ease-out);
+}
+.st-lr dt { font-size: .85rem; color: var(--fg2); }
+.st-lr dd { margin: 0; }
+.st-lr small, .st-lkfull small { display: block; color: var(--muted); font-size: .8rem; }
+@container (max-width: 480px) { .st-lr { grid-template-columns: 1fr; gap: .1rem; } }
+.st-base, .st-chg { font-size: .7rem; font-weight: 650; padding: .05rem .45rem; border-radius: 999px; background: var(--panel); color: var(--fg2); vertical-align: 2px; }
+.st-chg { background: var(--accent-soft); color: var(--accent-ink); }
+.st-lkfull tr.st-f > * { transition: opacity .45s var(--ease-out); }
+
+/* ---------- photos: 사진은 증거. 한 장을 키우고, 원문이 말한 자리를 표시한다 ---------- */
+.st-photos { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: center; margin: 4px 0 0; --pb: 0%; }
+.st-ph {
+  margin: 0; min-width: 0; overflow: hidden;
+  flex-grow: calc(var(--on, 1) * (1 + 1.6 * var(--hot, 0) * var(--fx, 0))); flex-shrink: 1;
+  flex-basis: calc(var(--on, 1) * var(--pb)); padding: 0 calc(var(--on, 1) * 6px) calc(var(--on, 1) * 10px);
+  /* 한 장만 남아도 화면을 다 덮지 않게 (키운 사진만 넓게), 사진 높이는 --phmax 안으로 (12px은 좌우 여백) */
+  max-width: min(calc(50% + 50% * var(--hot, 0) * var(--fx, 0)), calc(var(--pa, 9) * var(--phmax, 70vh) + 12px));
+  transition: flex-grow .7s var(--ease-move), flex-basis .7s var(--ease-move), max-width .7s var(--ease-move), padding .7s var(--ease-move), opacity .45s var(--ease-out);
+}
+@container (max-width: 520px) {
+  .st-photos { --pb: 40%; }
+  .st-ph { flex-basis: calc(var(--on, 1) * (40% + 60% * var(--hot, 0) * var(--fx, 0))); }
+}
+.st-phi { position: relative; border-radius: 8px; overflow: hidden; border-top: 3px solid var(--col, transparent); }
+.st-phi img { display: block; width: 100%; height: auto; }
+.st-frame { display: grid; place-items: center; border: 1px solid var(--fg2); border-radius: 8px; background: var(--panel); color: var(--muted); font-size: .85rem; }
+.st-detail { position: absolute; inset: 0; background: var(--bg); transform: scale(calc(.92 + .08 * var(--on, 0))); transition: opacity .45s var(--ease-out), transform .7s var(--ease-move); }
+.st-detail img { width: 100%; height: 100%; object-fit: contain; }
+.st-zone { position: absolute; border: 2px dashed var(--accent); background: color-mix(in srgb, var(--accent) 16%, transparent); border-radius: 6px; }
+.st-zone b, .st-zn { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: var(--accent); color: #fff; font: 700 10px/1 var(--mono); }
+.st-zone b { position: absolute; left: 4px; top: 4px; }
+.z-left { left: 0; top: 0; bottom: 0; width: 18%; }
+.z-right { right: 0; top: 0; bottom: 0; width: 18%; }
+.z-top { left: 0; right: 0; top: 0; height: 18%; }
+.z-bottom { left: 0; right: 0; bottom: 0; height: 18%; }
+.z-center { left: 30%; top: 30%; width: 40%; height: 40%; }
+.z-edges { inset: 0; background: none; border: 0; box-shadow: inset 0 0 0 14px color-mix(in srgb, var(--accent) 22%, transparent); }
+.st-ph figcaption { font-size: .82rem; margin-top: .45rem; display: grid; gap: .2rem; min-width: 8em; } /* 폭이 줄어드는 동안 글자가 한 줄씩 쌓이지 않게 */
+.st-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.st-chip { font: .72rem/1.6 var(--mono); padding: 0 .45rem; border-radius: 999px; background: var(--panel); color: var(--fg2); }
+.st-chip.is-diff { background: var(--accent-soft); color: var(--accent-ink); font-weight: 700; }
+.st-ptx { color: var(--fg2); }
+.st-pnotes { font-size: .85rem; }
+.st-c-figure .st-ph figcaption { font-size: .88rem; }
+
+/* ---------- 정적 블록 ---------- */
+.st-text { font-size: 1.05rem; max-width: 42em; }
+.st-text p + p { margin-top: .9em; }
+.st-note { --tone: var(--accent); display: flex; gap: .9rem; padding: 16px 18px; border-radius: 12px; background: var(--panel); border-left: 3px solid var(--tone); }
+.st-note--warn { --tone: var(--warn); background: var(--warn-soft); }
+.st-note--uncertain { --tone: var(--fg2); background: transparent; border: 1px dashed var(--fg2); }
+.st-note-i { flex: none; width: 1.5rem; height: 1.5rem; border-radius: 50%; display: grid; place-items: center; background: var(--tone); color: var(--bg); font: 700 .8rem/1 var(--mono); margin-top: .1rem; }
+.st-note-l { display: block; font-size: .85rem; }
+.st-note p { font-size: .95rem; }
+.st-tablewrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.st-tablewrap table { width: 100%; border-collapse: collapse; font-size: .92rem; border-top: 2px solid var(--fg); border-bottom: 2px solid var(--fg); }
+.st-tablewrap th, .st-tablewrap td { padding: .6rem .8rem; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+.st-tablewrap thead th { font-size: .82rem; font-weight: 600; color: var(--fg2); border-bottom: 1px solid var(--fg); }
+.st-tablewrap tbody th { font-weight: 600; }
+.st-tablewrap .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.st-tablewrap tr.is-hl > * { background: var(--accent-soft); }
+.st-tablewrap caption { caption-side: bottom; text-align: left; font-size: .85rem; color: var(--muted); padding-top: .6rem; }
+.st-compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+.st-opt { border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; }
+.st-opt.is-hl { border: 2px solid var(--accent); padding: 19px; }
+.st-badge { display: inline-block; font-size: .72rem; font-weight: 650; color: var(--accent-ink); background: var(--accent-soft); padding: .1rem .55rem; border-radius: 999px; margin-bottom: .6rem; }
+.st-lkh .st-badge, .st-lkfull .st-badge { margin: 0; vertical-align: 2px; }
+.st-opt h4 { font-size: 1.15rem; font-weight: 700; margin: 0; }
+.st-opt-sub { font-size: .9rem; color: var(--fg2); }
+.st-opt ul { margin: .8rem 0 0; padding-left: 1.1em; }
+.st-opt li { margin: .3rem 0; font-size: .95rem; }
+.st-check { list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--line); }
+.st-check li { border-bottom: 1px solid var(--line); }
+.st-check label { display: flex; gap: .85rem; padding: .8rem .2rem; cursor: pointer; }
+.st-check input { flex: none; width: 1.15rem; height: 1.15rem; margin: .3rem 0 0; accent-color: var(--accent); }
+.st-check small { display: block; font-size: .85rem; color: var(--muted); }
+.st-check input:checked + span { color: var(--muted); }
+.st-to { font-size: .82rem; white-space: nowrap; }
+.st-flow { list-style: none; padding: 0; margin: 0; display: flex; align-items: stretch; }
+.st-step { flex: 1 1 0; min-width: 0; border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; }
+.st-step-n { display: grid; place-items: center; width: 1.7rem; height: 1.7rem; border-radius: 50%; background: var(--accent-soft); color: var(--accent-ink); font: 600 .8rem/1 var(--mono); margin-bottom: .6rem; }
+.st-step strong { display: block; }
+.st-step p { font-size: .9rem; color: var(--fg2); margin-top: .3rem; }
+.st-arrow { flex: none; width: 2rem; display: grid; place-items: center; color: var(--muted); }
+.st-arrow::before { content: "→"; }
+.st-flow--v { flex-direction: column; max-width: 34rem; }
+.st-flow--v .st-arrow { width: auto; height: 1.8rem; }
+.st-flow--v .st-arrow::before { content: "↓"; }
+@media (max-width: 720px) {
+  .st-flow { flex-direction: column; }
+  .st-flow .st-arrow { width: auto; height: 1.8rem; }
+  .st-flow .st-arrow::before { content: "↓"; }
+}
+.st-codefig { margin: 0; position: relative; }
+.st-code { margin: 0; background: var(--panel); border-radius: 12px; padding: 16px 0; overflow-x: auto; font: .875rem/1.65 var(--mono); counter-reset: ln; }
+.st-code code { background: none; padding: 0; font-size: inherit; }
+.st-ln { display: block; padding-right: 18px; white-space: pre; counter-increment: ln; }
+.st-ln::before { content: counter(ln); display: inline-block; width: 3.2em; padding-right: 1.2em; text-align: right; color: var(--muted); user-select: none; }
+.st-ln.is-hl { background: var(--accent-soft); box-shadow: inset 3px 0 var(--accent); }
+.st-lang { position: absolute; top: 8px; right: 12px; font: .72rem var(--mono); color: var(--muted); }
+.st-codefig figcaption { font-size: .85rem; color: var(--muted); margin-top: .6rem; }
+
+/* ---------- 탐색 UI ---------- */
+.st-progress { position: fixed; top: 0; left: 0; right: 0; height: 2px; z-index: 30; pointer-events: none; }
+.st-progress i { display: block; height: 100%; background: var(--accent); transform-origin: 0 50%; transform: scaleX(var(--p, 0)); }
+.st-rail { position: fixed; right: 14px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 2px; z-index: 20; }
+.st-rail a { display: block; padding: 4px; }
+.st-rail a::before { content: ""; display: block; width: 7px; height: 7px; border-radius: 50%; background: var(--line); transition: background .2s, transform .2s; }
+.st-rail a:hover::before { background: var(--muted); }
+.st-rail a.on::before { background: var(--fg); transform: scale(1.3); }
+@media (max-width: 1100px) { .st-rail { display: none; } }
+.st-ctrl { position: fixed; right: 16px; bottom: 16px; display: flex; align-items: center; gap: 6px; z-index: 20; }
+.st-ctrl button { font: 600 .8rem/1 var(--font); color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 999px; padding: .55rem .85rem; cursor: pointer; }
+.st-ctrl button:hover { border-color: var(--muted); }
+.st-count { font: .8rem var(--mono); color: var(--muted); padding: 0 .3rem; }
+html:not(.js) .st-ctrl, html:not(.present) .st-ctrl .p-only { display: none; }
+
+/* ---------- 발표 모드: 한 장면씩, 같은 시퀀스면 무대가 그대로 이어진다 ---------- */
+html.present body { overflow: hidden; }
+html.present main > section {
+  position: fixed; inset: 0; overflow-y: auto; border: 0; background: var(--bg);
+  visibility: hidden; opacity: 0; z-index: 1;
+  transition: opacity .3s var(--ease-out), visibility 0s .3s;
+}
+html.present main > section.is-current { visibility: visible; opacity: 1; z-index: 2; transition: opacity .3s var(--ease-out); }
+html.present .st-seq { max-width: none; align-content: safe center; padding: 6vh 5vw; }
+html.present .st-stagecol { position: static; max-height: none; overflow: visible; background: none; border: 0; }
+html.present .st-seq .st-sc { display: none; margin: 0; padding: 0; border: 0; }
+html.present .st-seq .st-sc.is-cur { display: block; }
+html.present .st-beat:not(.is-on), html.present .st-take:not(.is-on) { display: none; }
+html.present .st-seq .st-beat, html.present .st-seq .st-take { min-height: 0; opacity: 1; }
+html.present .st-stage { width: min(100%, 760px, calc((100vh - 15rem) / var(--ar, 1))); margin-inline: auto; }
+html.present .st-c-panel .st-stage, html.present .st-b-stage .st-stage { width: auto; }
+
+/* ---------- JS 없음 · 동작 줄이기 · 인쇄 ---------- */
+/* JS가 없으면 사진 무대는 모든 사진·영역·설명을 흐리지 않고 펼친다 */
+html:not(.js) .st-ph, html:not(.js) .st-t-photos .st-zone, html:not(.js) .st-pnotes > * { --on: 1; }
+html:not(.js) .st-t-photos { --fx: 0 !important; }
+html:not(.js) .st-t-photos .st-f, html:not(.js) .st-ph.st-f { --dim: 0 !important; }
+html:not(.js) .st-pnotes { display: block; }
+html:not(.js) .st-detail { position: static; transform: none; --on: 1; margin-top: 6px; }
+@media (prefers-reduced-motion: reduce) {
+  .st-stage, .st-stage * { transition-duration: 0s !important; transition-delay: 0s !important; animation: none !important; }
+  html.js .st-seq .st-beat, html.js .st-seq .st-take { transition: none; }
+}
+@media print {
+  .st-progress, .st-rail, .st-ctrl, .st-ctl { display: none !important; }
+  body { overflow: visible !important; }
+  main > section { position: static !important; visibility: visible !important; opacity: 1 !important; overflow: visible !important; padding: 28px 0; border: 0; break-before: page; }
+  .st-cover { min-height: 0; }
+  .st-stagecol { position: static !important; max-height: none !important; overflow: visible !important; }
+  .st-seq { display: block; }
+  .st-seq .st-stage, .st-stage { width: auto !important; break-inside: avoid; }
+  .st-seq .st-sc, .st-beat:not(.is-on), .st-take:not(.is-on) { display: block !important; }
+  .st-seq .st-beat, .st-seq .st-take { min-height: 0 !important; opacity: 1 !important; }
+  .st-caps .st-beat { display: block !important; }
+  .st-stage, .st-stage * { transition: none !important; animation: none !important; }
+  .st-stage .st-f { --dim: 0 !important; }
+  .st-tablewrap, .st-code { overflow: visible; }
+  .st-ln { white-space: pre-wrap; }
+  /* 사진: 모든 영역·크롭·설명을 펼친다 (크롭은 원본 아래 별도 그림으로) */
+  .st-ph, .st-zone, .st-pnotes > *, .st-detail { --on: 1 !important; }
+  .st-pnotes { display: block; }
+  .st-detail { position: static; transform: none; margin-top: 6px; }
+  .st-stage { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+}
