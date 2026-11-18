@@ -10,7 +10,7 @@ import { validate, render, esc, imgSize, fmtNum } from './render.mjs'
 // 표시되지 않는 필드: id·참조·설정값·이미지 경로·범위 끝 등
 const NOT_SHOWN = new Set(['type', 'id', 'key', 'tone', 'layout', 'control', 'start', 'mark', 'scale', 'view', 'area', 'frame', 'base', 'record',
   'show', 'continue', 'to', 'of', 'from', 'focus', 'at', 'min', 'max', 'total', 'highlight',
-  'direction', 'lang', 'src', 'photo', 'alt', 'sign', 'log', 'scrub', 'compare', 'zero'])
+  'direction', 'lang', 'src', 'photo', 'alt', 'sign', 'log', 'scrub', 'compare', 'zero', 'col', 'row', 'signal', 'flow'])
 // 상태 안에서 id만 가리키는 필드 (같은 이름이 무대에서는 실제 내용이다: track rows, photos zones 등)
 const REFS = new Set(['rows', 'frames', 'zones', 'axes', 'detail'])
 const isRef = v => typeof v === 'string' || (Array.isArray(v) && v.every(x => typeof x === 'string'))
@@ -62,10 +62,10 @@ assert.deepEqual(validate(spec, { baseDir: here, warnings: warns }), [], 'exampl
 const html = render(spec, { date: '2026-01-01', baseDir: here })
 fidelity(spec, html, 'example.json')
 // 단계형 무대는 JS 없는 환경을 위해 마지막 상태로 출하, 탭은 start로 출하
-assert.ok(/id="st-shots" data-n="4" data-s="3"/.test(html), '이어 쓴 상태까지 합쳐 4개, 출하 상태는 마지막이어야 합니다')
-assert.ok(/id="st-sit" data-n="3" data-s="0" data-ctl="tabs"/.test(html), '탭 무대는 start 상태로 출하')
-// 모드 → 시간대는 교차표가 없으므로 디졸브, 1개 그룹 분할(1)·세분(2)은 점 이동
-assert.ok(/id="st-shots"[^>]*data-dis="3"/.test(html), '관계없는 재분류만 디졸브여야 합니다')
+assert.ok(/id="st-reqs" data-n="4" data-s="3"/.test(html), '이어 쓴 상태까지 합쳐 4개, 출하 상태는 마지막이어야 합니다')
+assert.ok(/id="st-env" data-n="3" data-s="0" data-ctl="tabs"/.test(html), '탭 무대는 start 상태로 출하')
+// API → 시간대는 교차표가 없으므로 디졸브, 1개 그룹 분할(1)·세분(2)은 점 이동
+assert.ok(/id="st-reqs"[^>]*data-dis="3"/.test(html), '관계없는 재분류만 디졸브여야 합니다')
 assert.ok(html.includes('details class="st-fallback" open'), '대체 표는 열린 채로 출하')
 // 숫자는 원문 표기 그대로 (dials·track은 자릿수 쉼표 없음)
 assert.ok(html.includes('6400') && !html.includes('6,400'), 'dials 눈금 숫자에 쉼표가 붙으면 안 됩니다')
@@ -88,6 +88,16 @@ e = errsOf(base({ type: 'dials', id: 'd', axes: [{ key: 'a', label: 'a', min: 0,
 assert.ok(e.some(m => m.includes('labels')), '범위 값의 라벨 누락을 잡아야 합니다')
 e = errsOf({ title: 't', scenes: [{ id: 'cover', title: 's', blocks: [{ type: 'cards', items: [] }] }] })
 assert.ok(e.some(m => m.includes('예약')) && e.some(m => m.includes('cards')), '예약 id와 없어진 블록을 잡아야 합니다')
+
+// diagram: 신호는 연결을 따라서만 옮겨 가고, 옮겨 간 연결은 저절로 켜진다
+const dg = (states, edges = [{ id: 'ab', from: 'a', to: 'b' }]) => base({ type: 'diagram', id: 'g', nodes: [{ id: 'a', label: 'A', col: 0, row: 0 }, { id: 'b', label: 'B', col: 1, row: 0 }, { id: 'c', label: 'C', col: 2, row: 0 }], edges, states })
+e = errsOf(dg([{ signal: 'a' }, { signal: 'c' }]))
+assert.ok(e.some(m => m.includes('states[1].signal') && m.includes('연결이 없습니다')), '연결 없는 신호 이동을 잡아야 합니다')
+assert.ok(errsOf(dg([{}], [{ id: 'ax', from: 'a', to: 'x' }])).some(m => m.includes('없는 요소 id "x"')), '없는 요소로 가는 연결을 잡아야 합니다')
+const w = []
+validate(dg([{}], [{ id: 'ac', from: 'a', to: 'c' }]), { warnings: w })
+assert.ok(w.some(m => m.includes('"ac" 선이 "b" 밑을')), '다른 요소 밑을 지나는 선을 경고해야 합니다')
+assert.ok(/class="st-de [^"]* c-1[ "]/.test(render(dg([{ signal: 'a' }, { signal: 'b' }]), { date: 'd' })), '신호가 지나간 연결이 켜져야 합니다')
 
 // 3) 텍스트는 이스케이프된다
 const evil = render({ title: '<script>alert(1)</script>', scenes: [{ id: 'a', title: 'a"b', stage: { type: 'lookup', id: 'l', fields: ['<b>'], records: [{ id: 'r', label: '<img src=x onerror=alert(1)>', values: ['<i>'] }], states: [{ record: 'r', say: '<svg onload=alert(1)>' }] } }] }, { date: 'd' })

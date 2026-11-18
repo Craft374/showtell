@@ -2,14 +2,14 @@
 // Showtell v2 renderer: 장면 명세(JSON) → 서버 없이 열리는 단일 HTML. 외부 의존성 없음.
 // 장면은 "무대(stage) 하나 + 상태(beat) 여러 개"로 설명한다. 모든 상태는 여기서 미리 계산하고,
 // 브라우저는 무대마다 data-s 정수 하나만 바꾼다. 움직임은 전부 CSS 전환이다.
-// 사용법: node render.mjs <spec.json> [--no-open]
+// 사용법: node render.mjs <spec.json> [--check | --no-open]  (--check: 검증만, 파일을 만들거나 열지 않음)
 import fs from 'node:fs'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
-const STAGES = ['units', 'dials', 'track', 'lookup', 'photos']
+const STAGES = ['units', 'dials', 'track', 'lookup', 'photos', 'diagram']
 const STATIC = ['text', 'note', 'table', 'checklist', 'flow', 'compare', 'code']
 const TONES = { info: ['i', '참고'], warn: ['!', '주의'], uncertain: ['?', '확인 필요'] }
 const KEBAB = /^[a-z0-9][a-z0-9-]*$/
@@ -556,12 +556,15 @@ function renderPhotos(st, states, ctx) {
     return `<figure class="st-ph st-v st-f${ks('s', ksf(a => a.show.includes(it.id)))}${ks('f', ksf(a => !a.focus || a.focus === it.id))}" style="${it.src ? paOf(it.src, ctx) : `--pa:${r2(((fw, fh) => fw / fh)(...(it.frame || '3:2').split(':')))};`}${it.key ? `--col:${ctx.col(it.key)}` : ''}"><div class="st-phi">${media}${det}${zones}</div><figcaption><strong>${inline(it.name)}</strong>${meta}${it.text ? `<span class="st-ptx">${inline(it.text)}</span>` : ''}${unc(it.uncertain)}${notes.length ? `<span class="st-stack st-pnotes">${notes.map(v => `<span class="st-v${ks('s', v.s)}">${v.html}</span>`).join('')}</span>` : ''}</figcaption></figure>`
   }).join('')}</div>`
   const item = id => IT.find(i => i.id === id)
-  const lines = abs.map(a => {
-    const parts = []
+  // 영역·크롭 설명은 사진 아래에 이미 보인다. 비트 글(say)이 있으면 데이터 줄에서 되풀이하지 않는다
+  const lines = abs.map((a, k) => {
+    const parts = [], said = !!states[k].say
     if (a.focus) { const it = item(a.focus); parts.push(`<strong>${inline(it.name)}</strong>${it.text ? ` — ${inline(it.text)}` : ''}`) }
-    else parts.push(a.show.map(id => inline(item(id).name)).join(' · '))
-    a.zones.forEach(z => { const [i, zz] = z.split('.'); parts.push(inline(item(i).zones.find(q => q.id === zz).text)) })
-    if (a.detail) parts.push(inline(item(a.detail).detail.text))
+    else if (!said) parts.push(a.show.map(id => inline(item(id).name)).join(' · '))
+    if (!said) {
+      a.zones.forEach(z => { const [i, zz] = z.split('.'); parts.push(inline(item(i).zones.find(q => q.id === zz).text)) })
+      if (a.detail) parts.push(inline(item(a.detail).detail.text))
+    }
     return parts.join(' / ')
   })
   return {
@@ -571,7 +574,89 @@ function renderPhotos(st, states, ctx) {
   }
 }
 
-const RENDER = { units: renderUnits, dials: renderDials, track: renderTrack, lookup: renderLookup, photos: renderPhotos }
+// ---------- diagram: 구성 요소와 연결. 신호가 연결을 따라 이동하고, 도착한 요소의 설명이 바뀐다 ----------
+// 칸 격자(col·row)에 요소를 놓고 연결은 중심끼리 직선으로 잇는다(요소 상자가 위를 덮는다). 자동 배치·경로 탐색은 없다.
+const D_CW = 200, D_CH = 130, D_NW = 144 // 칸 폭·높이, 요소 폭 (viewBox 단위)
+const dCenter = n => [(n.col + 0.5) * D_CW, (n.row + 0.5) * D_CH]
+const dEdgeBetween = (E, a, b) => E.find(e => e.from === a && e.to === b) || E.find(e => e.from === b && e.to === a)
+function diagramModel(st, states) {
+  let show = st.nodes.map(n => n.id), prev = null
+  const text = Object.fromEntries(st.nodes.map(n => [n.id, n.text || '']))
+  return states.map(s => {
+    if (s.show) show = s.show
+    for (const [id, d] of Object.entries(s.set || {})) if (id in text && isObj(d) && isStr(d.text)) text[id] = d.text
+    const signal = s.signal || null
+    const lit = new Set(s.flow || [])
+    // 신호가 연결을 따라 옮겨 가면 그 연결은 저절로 켜진다
+    if (signal && prev && signal !== prev) { const e = dEdgeBetween(st.edges, prev, signal); if (e) lit.add(e.id) }
+    prev = signal
+    return { show, focus: s.focus || [], signal, lit: [...lit], text: { ...text } }
+  })
+}
+function renderDiagram(st, states, ctx) {
+  const abs = diagramModel(st, states), N = st.nodes, E = st.edges
+  const node = id => N.find(n => n.id === id)
+  const W = (Math.max(...N.map(n => n.col)) + 1) * D_CW, H = (Math.max(...N.map(n => n.row)) + 1) * D_CH
+  const px = x => r2((x / W) * 100), py = y => r2((y / H) * 100)
+  const ksf = pred => abs.map((a, k) => (pred(a, k) ? k : -1)).filter(k => k >= 0)
+  const eOn = (a, e) => a.show.includes(e.from) && a.show.includes(e.to)
+  const hotN = (a, id) => a.focus.includes(id) || a.signal === id || a.lit.some(l => { const e = E.find(x => x.id === l); return e.from === id || e.to === id })
+  const pairs = new Set(E.map(e => `${e.from}>${e.to}`))
+  let svg = '', labs = ''
+  for (const e of E) {
+    let [x1, y1] = dCenter(node(e.from)), [x2, y2] = dCenter(node(e.to))
+    const len = Math.hypot(x2 - x1, y2 - y1), ux = (x2 - x1) / len, uy = (y2 - y1) / len
+    let nx = -uy, ny = ux
+    // 양방향 연결은 두 선을 나란히 벌리고, 이름표도 각자 바깥쪽에 둔다
+    const pair = pairs.has(`${e.to}>${e.from}`)
+    if (pair) { x1 += nx * 9; y1 += ny * 9; x2 += nx * 9; y2 += ny * 9 }
+    else if (ny > 0.2 || (Math.abs(ny) <= 0.2 && nx < 0)) { nx = -nx; ny = -ny } // 이름표는 선의 위쪽, 세로선이면 오른쪽
+    const mx = (x1 + x2) / 2, my = (y1 + y2) / 2
+    const head = [[mx + ux * 7, my + uy * 7], [mx - ux * 6 + nx * 6, my - uy * 6 + ny * 6], [mx - ux * 6 - nx * 6, my - uy * 6 - ny * 6]].map(p => p.map(r2).join(' ')).join(' L')
+    const cls = `st-v st-f${ks('s', ksf(a => eOn(a, e)))}${ks('f', ksf(a => a.lit.includes(e.id)))}${ks('c', ksf(a => a.lit.includes(e.id)))}`
+    const d = `M${r2(x1)} ${r2(y1)} L${r2(x2)} ${r2(y2)}`
+    svg += `<g class="st-de ${cls}"><path class="st-del" d="${d}"/><path class="st-dpulse" d="${d}" pathLength="100"/><path class="st-dah" d="M${head}Z"/></g>`
+    if (e.label) {
+      // 이름표를 선의 옆쪽(법선 방향)에 붙이고, 그 방향으로 자라게 해서 선을 덮지 않는다
+      const al = v => (v > 0.3 ? 0 : v < -0.3 ? -100 : -50)
+      labs += `<span class="st-delab ${cls}" style="left:${px(mx + nx * 7)}%;top:${py(my + ny * 7)}%;transform:translate(${al(nx)}%,${al(ny)}%)">${inline(e.label)}</span>`
+    }
+  }
+  const nodes = N.map(n => {
+    const [cx, cy] = dCenter(n)
+    const txt = variants(abs.map(a => (a.text[n.id] ? inline(a.text[n.id]) : null)))
+    return `<div class="st-dnode st-v st-f${ks('s', ksf(a => a.show.includes(n.id)))}${ks('f', ksf(a => hotN(a, n.id)))}${ks('c', ksf(a => a.signal === n.id))}" style="left:${px(cx)}%;top:${py(cy)}%;width:${px(D_NW)}%${n.key ? `;--col:${ctx.col(n.key)}` : ''}"><strong>${inline(n.label)}</strong>${txt.length ? `<span class="st-dgt">${stack(txt)}</span>` : ''}</div>`
+  }).join('')
+  // 신호 점: 신호가 없는 상태에서는 앞뒤 위치에 머문 채 숨는다 (엉뚱한 곳에서 날아오지 않게)
+  let sig = ''
+  if (abs.some(a => a.signal)) {
+    let last = abs.find(a => a.signal).signal
+    const at = abs.map(a => (last = a.signal || last))
+    sig = `<i class="st-dsig st-pos st-v${ks('s', ksf(a => !!a.signal))}" style="${at.map((id, k) => { const [x, y] = dCenter(node(id)); return `--x-${k}:${px(x)};--y-${k}:${py(y)}` }).join(';')}"></i>`
+  }
+  const uncs = [...N, ...E].filter(x => x.uncertain)
+  const elabel = e => `${inline(node(e.from).label)} → ${inline(node(e.to).label)}`
+  let body = `<div class="st-diagram" style="aspect-ratio:${W}/${H}"><svg class="st-dsvg" viewBox="0 0 ${W} ${H}" aria-hidden="true">${svg}</svg>${sig}${labs}${nodes}</div>`
+  if (uncs.length) body += uncs.map(x => `<p class="st-uncl">${x.from ? elabel(x) : inline(x.label)}${unc(x.uncertain)}</p>`).join('')
+
+  const lines = abs.map(a => {
+    const parts = [...new Set([a.signal, ...a.focus].filter(Boolean))].map(id => `<strong>${inline(node(id).label)}</strong>${a.text[id] ? ` — ${inline(a.text[id])}` : ''}${unc(node(id).uncertain)}`)
+    // 이름 없는 연결은 요소를 이미 적었으면 되풀이하지 않는다
+    const named = parts.length > 0
+    a.lit.forEach(id => { const e = E.find(x => x.id === id); if (!named || e.label || e.uncertain) parts.push(`${elabel(e)}${e.label ? ` (${inline(e.label)})` : ''}${unc(e.uncertain)}`) })
+    return parts.length ? parts.join(' / ') : N.filter(n => a.show.includes(n.id)).map(n => inline(n.label)).join(' · ')
+  })
+  const texts = n => [...new Set(abs.map(a => a.text[n.id]).filter(Boolean))].map(inline).join(' → ')
+  const fallback = `<table><thead><tr><th scope="col">구성 요소</th><th scope="col">설명</th></tr></thead><tbody>${N.map(n => `<tr><th scope="row">${inline(n.label)}</th><td>${texts(n)}${unc(n.uncertain)}</td></tr>`).join('')}</tbody></table><table><thead><tr><th scope="col">연결</th><th scope="col">내용</th></tr></thead><tbody>${E.map(e => `<tr><th scope="row">${elabel(e)}</th><td>${e.label ? inline(e.label) : ''}${unc(e.uncertain)}</td></tr>`).join('')}</tbody></table>`
+  return {
+    body, lines, fallback,
+    ar: H / W + uncs.length * 0.05,
+    fx: ksf(a => a.focus.length || a.signal || a.lit.length),
+    dis: [], hide: true,
+  }
+}
+
+const RENDER = { units: renderUnits, dials: renderDials, track: renderTrack, lookup: renderLookup, photos: renderPhotos, diagram: renderDiagram }
 
 // ---------- 무대 검증 ----------
 function checkStage(st, states, paths, sp, h, V, opt) {
@@ -798,6 +883,65 @@ function checkStage(st, states, paths, sp, h, V, opt) {
       for (const d of details) if (!abs.some(a => a.detail === d)) V.bad(sp, `"${d}"의 detail을 보여 주는 상태가 없습니다. 상태의 detail에 넣거나, 정적 그림이면 크롭을 별도 사진 항목으로 쓰세요`)
     }
   }
+
+  if (t === 'diagram') {
+    const ids = new Set(), eids = new Set(), cells = new Set(), pairs = new Set()
+    h.list(st, 'nodes', sp, (n, np) => {
+      if (!h.obj(n, np)) return
+      if (h.kebab(n.id, `${np}.id`)) { if (ids.has(n.id)) V.bad(`${np}.id`, `중복된 id "${n.id}"`); ids.add(n.id) }
+      h.str(n, 'label', np)
+      h.str(n, 'text', np, true)
+      h.str(n, 'uncertain', np, true)
+      if (n.key !== undefined) h.kebab(n.key, `${np}.key`)
+      if (!Number.isInteger(n.col) || n.col < 0 || n.col > 4) V.bad(`${np}.col`, '0~4 사이의 정수여야 합니다 (칸 5개까지)')
+      if (!Number.isInteger(n.row) || n.row < 0 || n.row > 5) V.bad(`${np}.row`, '0~5 사이의 정수여야 합니다 (줄 6개까지)')
+      if (cells.has(`${n.col},${n.row}`)) V.bad(np, `다른 요소와 같은 칸입니다 (col ${n.col}, row ${n.row})`)
+      cells.add(`${n.col},${n.row}`)
+      if (isStr(n.label) && textW(plain(n.label)) > 130) V.warn(`${np}.label`, '요소 이름이 깁니다. 설명은 text에 씁니다')
+    }, 2, 14)
+    h.list(st, 'edges', sp, (e, ep) => {
+      if (!h.obj(e, ep)) return
+      if (h.kebab(e.id, `${ep}.id`)) { if (eids.has(e.id)) V.bad(`${ep}.id`, `중복된 id "${e.id}"`); eids.add(e.id) }
+      for (const k of ['from', 'to']) if (!ids.has(e[k])) V.bad(`${ep}.${k}`, `없는 요소 id "${e[k]}"`)
+      if (e.from === e.to) V.bad(ep, 'from과 to가 같습니다')
+      if (pairs.has(`${e.from}>${e.to}`)) V.bad(ep, `같은 방향의 연결이 이미 있습니다 (${e.from} → ${e.to})`)
+      pairs.add(`${e.from}>${e.to}`)
+      h.str(e, 'label', ep, true)
+      h.str(e, 'uncertain', ep, true)
+    }, 1, 20)
+    if (!opt.block && ctl === 'slider') V.bad(`${sp}.control`, 'diagram은 steps 또는 tabs만 쓸 수 있습니다')
+    states.forEach((s, k) => {
+      const p = paths[k]
+      for (const key of ['show', 'focus']) h.opt(s, key, p, (v, q) => { if (!ids.has(v)) V.bad(q, `없는 요소 id "${v}"`) }, key === 'show' ? 1 : 0)
+      h.opt(s, 'flow', p, (v, q) => { if (!eids.has(v)) V.bad(q, `없는 연결 id "${v}"`) }, 0)
+      if (s.signal !== undefined && !ids.has(s.signal)) V.bad(`${p}.signal`, '요소 id 하나여야 합니다')
+      if (s.set !== undefined && h.obj(s.set, `${p}.set`)) for (const id in s.set) {
+        if (!ids.has(id)) { V.bad(`${p}.set.${id}`, '없는 요소 id입니다'); continue }
+        if (h.obj(s.set[id], `${p}.set.${id}`)) h.str(s.set[id], 'text', `${p}.set.${id}`)
+      }
+    })
+    if (V.errs.length === e0) {
+      const abs = diagramModel(st, states)
+      for (const n of st.nodes) if (!abs.some(a => a.show.includes(n.id))) V.bad(sp, `요소 "${n.id}"를 보여 주는 상태가 없습니다`)
+      abs.forEach((a, k) => {
+        for (const id of [...a.focus, ...(a.signal ? [a.signal] : [])]) if (!a.show.includes(id)) V.bad(paths[k], `"${id}": 보이는(show) 요소여야 합니다`)
+        for (const id of a.lit) { const e = st.edges.find(x => x.id === id); if (!a.show.includes(e.from) || !a.show.includes(e.to)) V.bad(paths[k], `연결 "${id}": 양 끝 요소가 보여야 합니다`) }
+        // 신호는 원문이 말한 연결을 따라서만 옮겨 간다
+        const prev = abs[k - 1]
+        if (prev && prev.signal && a.signal && prev.signal !== a.signal && !dEdgeBetween(st.edges, prev.signal, a.signal)) V.bad(`${paths[k]}.signal`, `"${prev.signal}"에서 "${a.signal}"로 가는 연결이 없습니다. 신호는 연결을 따라 한 칸씩 옮깁니다`)
+      })
+      // 연결선이 다른 요소 밑을 지나가면 그 요소와 이어진 것처럼 보인다
+      for (const e of st.edges) {
+        const [x1, y1] = dCenter(st.nodes.find(n => n.id === e.from)), [x2, y2] = dCenter(st.nodes.find(n => n.id === e.to))
+        for (const n of st.nodes) {
+          if (n.id === e.from || n.id === e.to) continue
+          const [cx, cy] = dCenter(n), L2 = (x2 - x1) ** 2 + (y2 - y1) ** 2
+          const t = ((cx - x1) * (x2 - x1) + (cy - y1) * (y2 - y1)) / L2
+          if (t > 0 && t < 1 && Math.hypot(x1 + t * (x2 - x1) - cx, y1 + t * (y2 - y1) - cy) < D_CH * 0.4) V.warn(`${sp}.edges`, `"${e.id}" 선이 "${n.id}" 밑을 지나갑니다. 요소 위치(col·row)를 옮기세요`)
+        }
+      }
+    }
+  }
 }
 
 // ---------- 문서 검증 ----------
@@ -882,7 +1026,7 @@ export function validate(spec, opts = {}) {
         if (stageCommon(b, bp, true)) seqs.push({ stage: b, states: b.states || [{}], paths: [`${bp}.states[0]`], block: true, sp: bp })
         return
       }
-      if (['cards', 'chart', 'html'].includes(b.type)) return V.bad(`${bp}.type`, `v2에서 "${b.type}"은 없어졌습니다. units·dials·track·photos·table을 쓰세요`)
+      if (['cards', 'chart', 'html'].includes(b.type)) return V.bad(`${bp}.type`, `v2에서 "${b.type}"은 없어졌습니다. units·dials·track·lookup·photos·diagram·table을 쓰세요`)
       if (!STATIC.includes(b.type)) return V.bad(`${bp}.type`, `${[...STATIC, ...STAGES].join(', ')} 중 하나여야 합니다`)
       const q = `${bp}(${b.type})`
       switch (b.type) {
@@ -941,7 +1085,7 @@ export function validate(spec, opts = {}) {
     if (sq.states.length > MAX_STATES) V.bad(sp, `이어 쓴 상태를 합쳐 ${MAX_STATES}개 이하여야 합니다 (${sq.states.length}개)`)
     else checkStage(sq.stage, sq.states, sq.paths, sp, h, V, { block: !!sq.block })
     const st = sq.stage
-    ;(st.items || []).forEach(it => addKey(it?.key))
+    ;[...(Array.isArray(st.items) ? st.items : []), ...(Array.isArray(st.nodes) ? st.nodes : [])].forEach(it => addKey(it?.key))
     sq.states.forEach(s => (Array.isArray(s?.groups) ? s.groups : []).forEach(g => addKey(g?.key)))
   }
   if (keys.size > 8) V.bad('spec', `색 key는 문서 전체에서 8개 이하여야 합니다 (${keys.size}개)`)
@@ -969,8 +1113,10 @@ function staticBlock(b, ctx) {
       return `<li><label><input type="checkbox"><span>${inline(o.text)}${o.note ? `<small>${inline(o.note)}</small>` : ''}${o.to ? ` <a class="st-to" href="#${esc(o.to)}">→ ${inline(ctx.titles[o.to])}</a>` : ''}</span></label></li>`
     }).join('')}</ul>`
     case 'flow': {
-      const vertical = b.direction === 'vertical' || (b.direction !== 'horizontal' && b.steps.length > 4)
-      return `<ol class="st-flow${vertical ? ' st-flow--v' : ''}">${b.steps.map((s, i) => {
+      // 설명 없는 단계는 이름표로 줄 바꿈하며 잇는다. 설명이 있으면 가로 5칸 이상은 칸이 좁아져 글자가 끊기므로 세로로 놓는다
+      const chips = b.steps.every(s => typeof s === 'string' || !s.text)
+      const vertical = !chips && (b.direction === 'vertical' || b.steps.length > 4)
+      return `<ol class="st-flow${chips ? ' st-flow--chips' : vertical ? ' st-flow--v' : ''}">${b.steps.map((s, i) => {
         const o = typeof s === 'string' ? { title: s } : s
         return `${i ? '<li class="st-arrow" aria-hidden="true"></li>' : ''}<li class="st-step"><span class="st-step-n" data-chrome>${i + 1}</span><strong>${inline(o.title)}</strong>${o.text ? `<p>${inline(o.text)}</p>` : ''}</li>`
       }).join('')}</ol>`
@@ -999,7 +1145,8 @@ function stageHtml(st, states, paths, ctx, mode, name = '') {
   const fig = `<figure class="st-stage st-t-${st.type}${R.fx.map(k => ` fx-${k}`).join('')}" id="st-${esc(st.id)}" data-n="${n}" data-s="${def}" data-ctl="${ctl}"${R.dis.length ? ` data-dis="${R.dis.join(' ')}"` : ''}${ctl === 'slider' ? ` data-labels="${esc(JSON.stringify(labels.map(plain)))}"` : ''} style="--ar:${r2(Math.max(0.3, R.ar))}">${c}<div class="st-body"${R.hide ? ' aria-hidden="true"' : ''}>${R.body}</div>${st.caption ? `<figcaption class="st-cap">${inline(st.caption)}</figcaption>` : ''}</figure>`
   return { fig, lines: R.lines, fallback: R.fallback ? `<details class="st-fallback" open><summary>표로 보기</summary><div class="st-tablewrap">${R.fallback}</div></details>` : '', n }
 }
-const beatLi = (id, k, s, line, label) => `<li class="st-beat" data-st="${esc(id)}" data-k="${k}">${label && s.label ? `<p class="st-blabel">${inline(s.label)}</p>` : ''}${s.say ? `<p class="st-say">${inline(s.say)}</p>` : ''}${line ? `<p class="st-data">${line}</p>` : ''}${unc(s.uncertain)}</li>`
+// 데이터 줄이 탭 이름과 같으면(lookup 탭: 경우 이름만) 되풀이하지 않는다. 탭·슬라이더 설명에는 탭 이름을 다시 쓰지 않는다(label=false)
+const beatLi = (id, k, s, line, label) => `<li class="st-beat" data-st="${esc(id)}" data-k="${k}">${label && s.label ? `<p class="st-blabel">${inline(s.label)}</p>` : ''}${s.say ? `<p class="st-say">${inline(s.say)}</p>` : ''}${line && !(s.label && line.replace(/<[^>]*>/g, '') === inline(s.label).replace(/<[^>]*>/g, '')) ? `<p class="st-data">${line}</p>` : ''}${unc(s.uncertain)}</li>`
 
 // ---------- 렌더링 ----------
 export function render(spec, { date = localDate(), baseDir = '.' } = {}) {
@@ -1057,7 +1204,7 @@ export function render(spec, { date = localDate(), baseDir = '.' } = {}) {
       // 탭·슬라이더 무대: 사용자가 직접 값을 바꿔 본다
       const paths = st.states.map((_, q) => `spec.scenes[${i}].stage.states[${q}]`)
       const S = stageHtml(st, st.states, paths, ctx, 'panel', sc.title)
-      out.push(`<section class="st-sc st-c-panel" id="${esc(sc.id)}" aria-labelledby="${esc(sc.id)}-t"><div class="st-inner">${head(sc)}${msg}${S.fig}<ol class="st-beats st-caps">${st.states.map((s, k) => beatLi(st.id, k, s, S.lines[k], true)).join('')}</ol>${S.fallback}${blocks(sc)}</div></section>`)
+      out.push(`<section class="st-sc st-c-panel" id="${esc(sc.id)}" aria-labelledby="${esc(sc.id)}-t"><div class="st-inner">${head(sc)}${msg}${S.fig}<ol class="st-beats st-caps">${st.states.map((s, k) => beatLi(st.id, k, s, S.lines[k], false)).join('')}</ol>${S.fallback}${blocks(sc)}</div></section>`)
     } else {
       const kind = sc.blocks[0].type === 'photos' ? 'figure' : 'reference'
       out.push(`<section class="st-sc st-c-${kind}" id="${esc(sc.id)}" aria-labelledby="${esc(sc.id)}-t"><div class="st-inner">${head(sc)}${msg}${blocks(sc)}</div></section>`)
@@ -1131,7 +1278,7 @@ function openFile(p) {
 function main(argv) {
   const file = argv.find(a => !a.startsWith('--'))
   if (!file) {
-    console.error('사용법: node render.mjs <spec.json> [--no-open]')
+    console.error('사용법: node render.mjs <spec.json> [--check | --no-open]')
     process.exit(2)
   }
   let spec
@@ -1149,6 +1296,8 @@ function main(argv) {
     console.error(`✗ 명세 오류 ${errs.length}건. 명세를 고친 뒤 다시 실행하세요.\n${errs.map(e => `  - ${e}`).join('\n')}`)
     process.exit(1)
   }
+  // 검증만: 오류·경고를 다 고친 뒤 한 번만 렌더링하면 탭과 결과 파일이 하나만 생긴다
+  if (argv.includes('--check')) return console.log(`✓ 명세 검증 통과${warnings.length ? ` (경고 ${warnings.length}건)` : ''}. --check 없이 실행하면 렌더링하고 엽니다.`)
 
   const date = localDate()
   const html = render(spec, { date, baseDir: dir })
@@ -1165,7 +1314,11 @@ function main(argv) {
   }
   console.log(`✓ Showtell: ${out}\n  장면 ${spec.scenes.length}개 · ${(Buffer.byteLength(html) / 1024 / 1024).toFixed(1)}MB`)
   if (Buffer.byteLength(html) > 8 * 1024 * 1024) console.log('! 결과물이 8MB를 넘습니다. 사진을 줄이면 빨리 열립니다.')
-  if (!argv.includes('--no-open')) openFile(out)
+  if (!argv.includes('--no-open')) {
+    openFile(out)
+    // Claude가 같은 파일을 open으로 한 번 더 열어 탭이 두 개 생기지 않게 분명히 알린다
+    console.log('  브라우저로 열었습니다. 다시 열지 마세요.')
+  }
 }
 
 // 심볼릭 링크 경로로 실행해도 동작하도록 실제 경로로 비교

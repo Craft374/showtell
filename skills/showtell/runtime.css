@@ -251,6 +251,38 @@ html:not(.js) .st-ctl { display: none; }
 .st-pnotes { font-size: .85rem; }
 .st-c-figure .st-ph figcaption { font-size: .88rem; }
 
+/* ---------- diagram: 구성 요소와 연결, 신호가 연결을 따라 이동한다 ---------- */
+.st-diagram { position: relative; margin: 8px 0 4px; }
+.st-dsvg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+/* 켜진 연결(--chg)은 강조색, 그 위를 짧은 선분이 계속 흐른다 */
+.st-de { color: color-mix(in srgb, var(--accent) calc(var(--chg, 0) * 100%), var(--muted)); transition: color .45s var(--ease-out), opacity .45s var(--ease-out); }
+.st-del { fill: none; stroke: currentColor; stroke-width: calc(1.6px + var(--chg, 0) * 1px); }
+.st-dah { fill: currentColor; }
+.st-dpulse { fill: none; stroke: var(--accent); stroke-width: 5; stroke-linecap: round; stroke-dasharray: 7 93; opacity: var(--chg, 0); animation: st-pulse 1.6s linear infinite; }
+@keyframes st-pulse { from { stroke-dashoffset: 100; } to { stroke-dashoffset: 0; } }
+.st-delab { position: absolute; z-index: 3; font-size: 11px; line-height: 1.35; padding: 0 6px; border-radius: 999px; background: var(--bg); white-space: nowrap; color: color-mix(in srgb, var(--accent-ink) calc(var(--chg, 0) * 100%), var(--fg2)); }
+.st-dnode {
+  position: absolute; transform: translate(-50%, -50%); z-index: 2;
+  background: var(--bg); border: 1px solid var(--line); border-top: 3px solid var(--col, var(--line)); border-radius: 10px;
+  padding: 7px 9px; text-align: center; font-size: 12px; line-height: 1.4; overflow-wrap: anywhere;
+  box-shadow: 0 0 0 calc(var(--chg, 0) * 3px) var(--accent);
+  transition: box-shadow .45s var(--ease-out), opacity .45s var(--ease-out);
+}
+/* 흐려져도 상자는 불투명하게 두어 밑을 지나는 선이 비치지 않게 한다 (글자만 흐린다) */
+.st-dnode.st-f { opacity: var(--on, 1); }
+.st-dnode > * { opacity: calc(1 - .65 * var(--dim, 0) * (1 - var(--hot, 0))); transition: opacity .45s var(--ease-out); }
+.st-dnode strong { display: block; font-size: 13px; }
+.st-dgt { display: block; color: var(--fg2); margin-top: 2px; }
+/* 신호 점은 요소 밑으로 들어간다. 도착한 요소는 테두리(--chg)로 표시된다 */
+.st-dsig {
+  position: absolute; z-index: 1; left: calc(var(--x) * 1%); top: calc(var(--y) * 1%);
+  width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; background: var(--accent);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 30%, transparent);
+  transition: left .9s var(--ease-move), top .9s var(--ease-move), opacity .45s var(--ease-out);
+}
+/* ponytail: 좁은 무대에서는 요소 설명을 숨긴다 (비트 글·표로 보기에 남는다). 5칸 도식은 휴대폰에서 빽빽하다 */
+@container (max-width: 520px) { .st-dgt { display: none; } .st-dnode { padding: 4px 5px; } .st-dnode strong { font-size: 11px; } .st-delab { font-size: 10px; } }
+
 /* ---------- 정적 블록 ---------- */
 .st-text { font-size: 1.05rem; max-width: 42em; }
 .st-text p + p { margin-top: .9em; }
@@ -294,10 +326,13 @@ html:not(.js) .st-ctl { display: none; }
 .st-flow--v { flex-direction: column; max-width: 34rem; }
 .st-flow--v .st-arrow { width: auto; height: 1.8rem; }
 .st-flow--v .st-arrow::before { content: "↓"; }
+.st-flow--chips { flex-wrap: wrap; align-items: center; row-gap: 8px; }
+.st-flow--chips .st-step { flex: none; display: flex; align-items: center; gap: .5rem; padding: 6px 14px 6px 8px; border-radius: 999px; }
+.st-flow--chips .st-step-n { margin: 0; width: 1.4rem; height: 1.4rem; }
 @media (max-width: 720px) {
-  .st-flow { flex-direction: column; }
-  .st-flow .st-arrow { width: auto; height: 1.8rem; }
-  .st-flow .st-arrow::before { content: "↓"; }
+  .st-flow:not(.st-flow--chips) { flex-direction: column; }
+  .st-flow:not(.st-flow--chips) .st-arrow { width: auto; height: 1.8rem; }
+  .st-flow:not(.st-flow--chips) .st-arrow::before { content: "↓"; }
 }
 .st-codefig { margin: 0; position: relative; }
 .st-code { margin: 0; background: var(--panel); border-radius: 12px; padding: 16px 0; overflow-x: auto; font: .875rem/1.65 var(--mono); counter-reset: ln; }
